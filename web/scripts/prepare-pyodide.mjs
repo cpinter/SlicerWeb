@@ -38,6 +38,24 @@ export function patchPyodideAsm(text) {
       "if(!flags.global){if(localScope){Object.assign(localScope,dso.exports)}}",
       "if(!flags.global){if(localScope&&!dso.global){Object.assign(localScope,dso.exports)}}",
     ],
+    [
+      // A Python string of 64 bytes or more is converted to JavaScript from a pointer that EM_JS
+      // hands over as a signed int: above 2 GB of heap it is negative, and subarray() counts from
+      // the end of the heap, so the page gets a string of the right length made of the bytes of
+      // whatever (VTK) array sits there. The short-string loop next to it unsigns the pointer, and
+      // so does Pyodide's main branch (HEAP_INDEX_8); the release does not.
+      "return decoder.decode(Module.HEAPU8.subarray(ptr,ptr+len))}",
+      "return decoder.decode(Module.HEAPU8.subarray(ptr>>>0,(ptr>>>0)+len))}",
+    ],
+    [
+      // The same signed pointer when a JavaScript buffer is copied to or from Python memory
+      "Module.HEAPU8.set(bufferAsUint8Array(buf),ptr)}",
+      "Module.HEAPU8.set(bufferAsUint8Array(buf),ptr>>>0)}",
+    ],
+    [
+      "bufferAsUint8Array(buf).set(Module.HEAPU8.subarray(ptr,ptr+buf.byteLength))}",
+      "bufferAsUint8Array(buf).set(Module.HEAPU8.subarray(ptr>>>0,(ptr>>>0)+buf.byteLength))}",
+    ],
   ];
   for (const [from, to] of patches) {
     const n = text.split(from).length - 1;
