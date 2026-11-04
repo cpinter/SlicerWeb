@@ -411,9 +411,15 @@ class QObject:
         if len(args) >= 3:
             if isinstance(args[0], str):
                 signal, receiver, slot = args[:3]
+                argumentCount = _signature_argument_count(signal)
                 if isinstance(slot, str):
+                    # as many arguments as the slot's signature takes: 'start()' of a timer takes
+                    # none, whatever the signal carries
+                    slotCount = _signature_argument_count(slot)
+                    if slotCount is not None:
+                        argumentCount = slotCount if argumentCount is None else min(argumentCount, slotCount)
                     slot = getattr(receiver, slot.split("(")[0].strip())
-                return self._signal(signal).connect(slot, argumentCount=_signature_argument_count(signal))
+                return self._signal(signal).connect(slot, argumentCount=argumentCount)
             sender, signal, slot = args[:3]
             return sender._signal(signal).connect(slot, argumentCount=_signature_argument_count(signal))
         raise TypeError("connect() expects (signal, slot), (sender, signal, slot) or (signal, receiver, slot)")

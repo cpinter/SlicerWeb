@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
         <span v-if="busy" class="text-[12px] text-muted-foreground" data-name="testStatus">{{ busy }}…{{ testMessage ? " " + testMessage : "" }}</span>
       </div>
       <div v-if="!hasTest" class="text-[12px] text-muted-foreground">This module has no self test.</div>
-      <div v-if="result" class="mt-1 rounded px-2 py-1 text-[12px]" :class="result.passed ? 'bg-emerald-900/40 text-emerald-200' : 'bg-red-900/40 text-red-200'">
+      <div v-if="result" data-name="testResult" class="mt-1 rounded px-2 py-1 text-[12px]" :class="result.passed ? 'bg-emerald-900/40 text-emerald-200' : 'bg-red-900/40 text-red-200'">
         {{ result.message }}<span v-if="result.seconds"> ({{ result.seconds }} s)</span>
       </div>
       <pre v-if="result?.traceback" class="mt-1 max-h-60 overflow-auto rounded bg-card p-2 text-[11px] whitespace-pre-wrap">{{ result.traceback }}</pre>

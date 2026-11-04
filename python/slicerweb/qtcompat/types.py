@@ -1312,7 +1312,10 @@ class QTableWidgetItem:
         return 0
 
     def setIcon(self, icon):
-        pass
+        self._icon = icon
+
+    def icon(self):
+        return getattr(self, "_icon", None) or QIcon()
 
     def setStatusTip(self, text):
         pass
@@ -1333,9 +1336,34 @@ _CSS_CURSORS = {
 }
 
 
+class QStyle:
+    """The application's style, as far as modules ask it for its standard icons. An icon is a small
+    picture the page can show (as a data address), for the signs that say something."""
+
+    SP_MessageBoxInformation, SP_MessageBoxWarning, SP_MessageBoxCritical, SP_MessageBoxQuestion = 9, 10, 11, 12
+
+    _SIGNS = {SP_MessageBoxInformation: ("#2f7dd1", "i"), SP_MessageBoxWarning: ("#e0a100", "!"),
+              SP_MessageBoxCritical: ("#d13438", "x"), SP_MessageBoxQuestion: ("#2f7dd1", "?")}
+
+    def standardIcon(self, which, *args):
+        sign = self._SIGNS.get(which)
+        if sign is None:
+            return QIcon()
+        color, letter = sign
+        svg = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
+               f"<circle cx='8' cy='8' r='7.5' fill='{color}'/>"
+               "<text x='8' y='12.5' font-size='12' font-weight='700' font-family='sans-serif' "
+               f"text-anchor='middle' fill='white'>{letter}</text></svg>")
+        return QIcon("data:image/svg+xml," + svg.replace("<", "%3C").replace(">", "%3E").replace("#", "%23"))
+
+
 class QApplication:
     #: The cursors set over the application, as Qt keeps them: a stack, the last one showing.
     _overrideCursors = []
+
+    @staticmethod
+    def style():
+        return QStyle()
 
     @staticmethod
     def processEvents(*args):

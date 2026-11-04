@@ -10,8 +10,11 @@ site of static files, such as the published one, has one only where it was built
 of one, see download-proxy/worker.js).
 """
 
+import email.message
+import io
 import logging
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -204,6 +207,51 @@ def urlretrieve(url, filename=None, reporthook=None, data=None):
     return filename, {"Content-Length": str(len(content))}
 
 
+class _Response(io.BytesIO):
+    """What urllib.request.urlopen answers: a file of what was downloaded."""
+
+    def __init__(self, url, content):
+        super().__init__(content)
+        self.url = url
+        self.status = self.code = 200
+        self.reason = "OK"
+        self.headers = email.message.Message()
+        self.headers["Content-Length"] = str(len(content))
+
+    def getcode(self):
+        return self.status
+
+    def geturl(self):
+        return self.url
+
+    def info(self):
+        return self.headers
+
+    def getheader(self, name, default=None):
+        return self.headers.get(name, default)
+
+
+_socket_urlopen = urllib.request.urlopen
+
+
+def urlopen(url, data=None, *args, **kwargs):
+    """urllib.request.urlopen for the browser: reading a file of a web site. A request that is more
+    than that (data to send, its own headers) is left to urllib, which says that it cannot do it,
+    rather than being sent without what it asked for."""
+    request = url if isinstance(url, urllib.request.Request) else None
+    address = request.full_url if request is not None else str(url)
+    plain = data is None and (request is None or (
+        request.get_method() == "GET" and not set(dict(request.header_items())) - {"User-agent"}))
+    if not plain or urllib.parse.urlsplit(address).scheme not in ("http", "https"):
+        return _socket_urlopen(url, data, *args, **kwargs)
+    logger.info("Downloading %s", address)
+    try:
+        return _Response(address, download(address))
+    except Exception as error:
+        raise urllib.error.URLError(str(error)) from None
+
+
 def install():
     """Use the browser for urllib downloads (slicer.util.downloadFile, SampleData, module tests)."""
     urllib.request.urlretrieve = urlretrieve
+    urllib.request.urlopen = urlopen

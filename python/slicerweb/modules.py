@@ -623,7 +623,8 @@ def _useWebDeveloperSection():
     button, a button to open the source in an editor and one to restart the application. The page
     shows its own section at the bottom of every scripted module's panel instead
     (ScriptedModuleHost.vue), with what applies here; a module's own developerMode stays what the
-    setting says, as on the desktop.
+    setting says, as on the desktop. A module can add its own developer tools to the section
+    (self.reloadCollapsibleButton.layout().addRow): the section is shown once it holds one.
     """
     from slicer.ScriptedLoadableModule import ScriptedLoadableModuleWidget
 
@@ -631,7 +632,22 @@ def _useWebDeveloperSection():
         return
 
     def setupDeveloperSection(self):
-        pass
+        import ctk
+        import qt
+
+        button = ctk.ctkCollapsibleButton()
+        button.text = "Developer tools"
+        layout = qt.QFormLayout(button)
+        addRow = layout.addRow
+
+        def addRowAndShow(*args):
+            button.show()
+            return addRow(*args)
+
+        layout.addRow = addRowAndShow
+        button.hide()
+        self.layout.addWidget(button)
+        self.reloadCollapsibleButton = button
 
     setupDeveloperSection._slicerweb = True
     ScriptedLoadableModuleWidget.setupDeveloperSection = setupDeveloperSection

@@ -105,7 +105,8 @@ covers the independent-component and label-map paths. Both are covered by
   (`python/slicerweb/cli_modules.py`); the others are described but refuse to run, naming
   themselves. What is implemented: Threshold Scalar Volume, Add/Subtract/Multiply Scalar Volumes,
   Cast Scalar Volume, Mask Scalar Volume, Gaussian Blur, Median Image Filter, Resample Scalar
-  Volume, Merge Models, Grayscale Model Maker, and Decimation for the VMTK modules. The ones that
+  Volume, Merge Models, Grayscale Model Maker, Probe Volume With Model, and Decimation for the VMTK
+  modules. The ones that
   would need ITK registration or bias field correction (BRAINSFit, N4ITK, Extract Skeleton,
   Fiducial Registration) are not among them, so the extension modules that call those still fail.
   From a panel a module runs in a worker, as Slicer runs one in a separate program: the nodes are

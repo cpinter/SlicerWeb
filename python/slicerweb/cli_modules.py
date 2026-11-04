@@ -530,6 +530,46 @@ def _merge_models(parameters):
         output.CreateDefaultDisplayNodes()
 
 
+@implements("ProbeVolumeWithModel")
+def _probe_volume_with_model(parameters):
+    """As Modules/CLI/ProbeVolumeWithModel: the volume's voxels, scalar or vector, sampled at the
+    points of the model, in the array the module is told to name, on a copy of the model."""
+    volume, model, output = _required(parameters, "InputVolume", "InputModel", "OutputModel")
+    if volume.GetImageData() is None:
+        raise ValueError("Probe Volume With Model: the input volume is empty")
+    if model.GetMesh() is None:
+        raise ValueError("Probe Volume With Model: the input model has no mesh")
+    image = vtk.vtkImageData()
+    image.ShallowCopy(volume.GetImageData())
+    image.SetSpacing(1.0, 1.0, 1.0)
+    image.SetOrigin(0.0, 0.0, 0.0)
+    scalars = image.GetPointData().GetScalars()
+    named = scalars.NewInstance()
+    named.ShallowCopy(scalars)
+    named.SetName(str(parameters.get("OutputArrayName") or "NRRDImage"))
+    image.GetPointData().SetScalars(named)
+
+    rasToIjk = vtk.vtkMatrix4x4()
+    volume.GetRASToIJKMatrix(rasToIjk)
+    transformRasToIjk = vtk.vtkTransform()
+    transformRasToIjk.SetMatrix(rasToIjk)
+    toIjk = vtk.vtkTransformFilter()
+    toIjk.SetTransform(transformRasToIjk)
+    toIjk.SetInputData(model.GetMesh())
+    probe = vtk.vtkProbeFilter()
+    probe.SetSourceData(image)
+    probe.SetInputConnection(toIjk.GetOutputPort())
+    toRas = vtk.vtkTransformFilter()
+    toRas.SetTransform(transformRasToIjk.GetInverse())
+    toRas.SetInputConnection(probe.GetOutputPort())
+    toRas.Update()
+    result = toRas.GetOutput().NewInstance()
+    result.DeepCopy(toRas.GetOutput())
+    output.SetAndObserveMesh(result)
+    if output.GetDisplayNode() is None:
+        output.CreateDefaultDisplayNodes()
+
+
 @implements("GrayscaleModelMaker")
 def _grayscale_model_maker(parameters):
     inputVolume, output = _required(parameters, "InputVolume", "OutputGeometry")

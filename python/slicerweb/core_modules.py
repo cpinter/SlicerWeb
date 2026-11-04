@@ -34,6 +34,17 @@ def _setup_colors(module, app, logic):
     paths = app.userSettings().value("QTCoreModules/Colors/ColorFilePaths", []) or []
     logic.SetUserColorFilePaths(":".join(paths))
 
+    # The module's panel is the page's. What a module does through its Qt widget, on the desktop,
+    # is making a color legend for a displayable node.
+    def widgetRepresentation():
+        if module._widget is None:
+            from .qtcompat.mrmlwidgets import ColorsModuleWidget
+
+            module._widget = ColorsModuleWidget(logic)
+        return module._widget
+
+    module.widgetRepresentation = widgetRepresentation
+
 
 def _import_python_lib(name):
     def setup(module, app, logic):

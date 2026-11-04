@@ -118,6 +118,11 @@ class qMRMLNodeComboBox(_ElementWidget):
         node = self.currentNode()
         self.currentNodeChanged.emit(node)
         self.currentNodeIDChanged.emit(nodeID or "")
+        # On the desktop, moving to a node sends the combo box's view a key event, and the box then
+        # reports the node as activated (qMRMLNodeComboBoxPrivate::setCurrentNodeIDInternal); moving
+        # to no node does not.
+        if node is not None:
+            self.nodeActivated.emit(node)
 
     def setMRMLScene(self, scene):
         super().setMRMLScene(scene)
@@ -145,12 +150,7 @@ class qMRMLNodeComboBox(_ElementWidget):
         return node
 
     def nodeCount(self):
-        import slicer
-
-        count = 0
-        for t in self.nodeTypes:
-            count += slicer.mrmlScene.GetNumberOfNodesByClass(t)
-        return count
+        return len(self.nodes())
 
     def nodes(self):
         """The nodes the list holds, in the order of the scene: those of the node types, without the
@@ -181,7 +181,8 @@ class qMRMLNodeComboBox(_ElementWidget):
         return found is not None if value is None else found == str(value)
 
     def nodeFromIndex(self, index):
-        return None
+        nodes = self.nodes()
+        return nodes[index] if 0 <= index < len(nodes) else None
 
     def setNodeTypeLabel(self, label, nodeType):
         pass
@@ -529,6 +530,78 @@ class qMRMLSegmentsTableView(QWidget):
         return []
 
 
+class _ColorLegendDisplayNodeWidget(QWidget):
+    """The widget of the color legend in the Colors module: which legend it is showing."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setObjectName("ColorLegendDisplayNodeWidget")
+        self._node = None
+
+    def mrmlColorLegendDisplayNode(self):
+        return self._node
+
+
+class _LabelTextPropertyWidget(QWidget):
+    """The label format of the color legend: text sets how the legend writes its numbers."""
+
+    def __init__(self, parent, legendWidget):
+        super().__init__(parent)
+        self.setObjectName("LabelTextPropertyWidget")
+        self._legendWidget = legendWidget
+        self._text = ""
+
+    @property
+    def text(self):
+        return self._text
+
+    @text.setter
+    def text(self, value):
+        self._text = str(value)
+        node = self._legendWidget.mrmlColorLegendDisplayNode()
+        if node is not None:
+            node.SetLabelFormat(self._text)
+
+
+class ColorsModuleWidget(QWidget):
+    """slicer.modules.colors.widgetRepresentation(), as far as module code uses it: never shown (the
+    module's panel is the page's), the color legend of a displayable node (qSlicerColorsModuleWidget)."""
+
+    def __init__(self, logic):
+        super().__init__(None)
+        self._logic = logic
+        self._displayableNode = None
+        self._legendWidget = _ColorLegendDisplayNodeWidget(self)
+        self._labelWidget = _LabelTextPropertyWidget(self, self._legendWidget)
+
+    def _update(self):
+        import slicer
+
+        node = self._displayableNode
+        self._legendWidget._node = slicer.vtkSlicerColorLogic.GetColorLegendDisplayNode(node) if node else None
+
+    def onDisplayableNodeChanged(self, node):
+        self._displayableNode = node
+        self._update()
+
+    def createColorLegend(self):
+        import slicer
+
+        self._update()
+        node = self._displayableNode
+        if node is None or node.GetDisplayNode() is None or self._legendWidget._node is not None:
+            return
+        slicer.vtkSlicerColorLogic.AddDefaultColorLegendDisplayNode(node)
+        self._update()
+
+    def deleteColorLegend(self):
+        self._update()
+        legend = self._legendWidget._node
+        if legend is not None and legend.GetScene() is not None:
+            legend.GetScene().RemoveNode(legend)
+        self._legendWidget._node = None
+
+
 class qMRMLSegmentEditorWidget(QWidget):
     """Placeholder: the browser Segment Editor is available as the "Segment Editor" module panel."""
 
@@ -561,6 +634,31 @@ class qMRMLSegmentEditorWidget(QWidget):
         from .. import segment_editor
 
         segment_editor.editor().setEffect(name)
+
+    def setActiveEffect(self, effect):
+        """None: no effect active. There are no effect objects here to activate (effectByName)."""
+        if effect is None:
+            self.setActiveEffectByName("")
+
+    def effectByName(self, name):
+        """None, as for an effect that is not there: the effects are the Segment Editor panel's."""
+        return None
+
+    # What the module asks of the look of the widget, which here is only a pointer to the panel
+    def setSwitchToSegmentationsButtonVisible(self, visible):
+        pass
+
+    def installKeyboardShortcuts(self, *args):
+        pass
+
+    def uninstallKeyboardShortcuts(self):
+        pass
+
+    def setEffectNameOrder(self, names):
+        self._effectNameOrder = list(names)
+
+    def effectNameOrder(self):
+        return list(getattr(self, "_effectNameOrder", []))
 
 
 class _WebView:

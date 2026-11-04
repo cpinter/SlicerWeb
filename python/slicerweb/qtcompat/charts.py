@@ -176,6 +176,22 @@ class ctkVTKChartView(QWidget):
     def minimumSize(self, size):
         self.setMinimumSize(size)
 
+    @property
+    def minimumHeight(self):
+        return self._minimum[1]
+
+    @minimumHeight.setter
+    def minimumHeight(self, height):
+        self.setMinimumSize(self._minimum[0], height)
+
+    @property
+    def minimumWidth(self):
+        return self._minimum[0]
+
+    @minimumWidth.setter
+    def minimumWidth(self, width):
+        self.setMinimumSize(width, self._minimum[1])
+
     def setMinimumSize(self, *args):
         if len(args) == 2:
             self._minimum = (int(args[0]), int(args[1]))

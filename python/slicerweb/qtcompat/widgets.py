@@ -7,7 +7,7 @@ element. User interaction on the element updates the Python state and emits the 
 import logging
 
 from . import dom
-from .core import CheckedProp, QObject, QProp, Signal, count_property, text_property
+from .core import CallableInt, CheckedProp, QObject, QProp, Signal, count_property, text_property
 from .types import QAbstractItemView, QTableWidgetItem
 
 logger = logging.getLogger("slicerweb.qt")
@@ -437,7 +437,21 @@ class QLayout(QObject):
         self._el.appendChild(layout._el)
 
     def insertWidget(self, index, widget, *args):
-        self.addWidget(widget)
+        """At that place among the layout's items; at the end for a negative index or one past them."""
+        if widget is None:
+            return
+        if widget in self._items:
+            self.removeWidget(widget)
+        if not 0 <= index < len(self._items):
+            self.addWidget(widget)
+            return
+        self._adopt(widget)
+        self._items.insert(index, self._items.pop())   # _adopt put it last
+        self._el.insertBefore(widget._el, self._items[index + 1]._el)
+
+    def indexOf(self, item):
+        """The place of a widget or layout among the layout's items, -1 if it is not one of them."""
+        return self._items.index(item) if item in self._items else -1
 
     def removeWidget(self, widget):
         if widget in self._items:
@@ -657,6 +671,13 @@ class QLabel(QWidget):
     _classes = ""
 
     linkActivated = Signal("linkActivated(QString)")
+
+    def setBuddy(self, widget):
+        """The widget the label names; kept, as nothing here moves the focus by a label's shortcut."""
+        self._buddy = widget
+
+    def buddy(self):
+        return getattr(self, "_buddy", None)
 
     def __init__(self, text="", parent=None, *args):
         if isinstance(text, QWidget):
@@ -1150,12 +1171,41 @@ class QLineEdit(_ElementWidget):
     placeholderText = QProp("", el="placeholderText", convert=str)
     readOnly = QProp(False, el="readOnly", convert=_bool)
 
+    cursorPositionChanged = Signal("cursorPositionChanged(int,int)")
+
+    def _getCursorPosition(self):
+        return getattr(self, "_cursorPos", 0)
+
+    def setCursorPosition(self, position):
+        """Where the cursor is in the text; moving it says so (cursorPositionChanged(old, new))."""
+        old, new = self._getCursorPosition(), int(position)
+        self._cursorPos = new
+        if new != old:
+            self.cursorPositionChanged.emit(old, new)
+
+    def _propertyChanged(self, name, value):
+        super()._propertyChanged(name, value)
+        if name == "text":
+            self.setCursorPosition(len(str(value)))   # as in Qt, a text set leaves it at the end
+
+    def _onClicked(self, *args):
+        """A click in the box puts the cursor where it landed, which is how a module hears of it."""
+        field = None
+        try:
+            field = self._el.querySelector("input")
+            self.setCursorPosition(int(field.selectionStart))
+        except Exception:
+            logger.debug("Could not read the cursor of a line edit", exc_info=True)
+
+    cursorPosition = count_property(_getCursorPosition, setCursorPosition)
+
     def __init__(self, text="", parent=None):
         if isinstance(text, QWidget):
             parent, text = text, ""
         super().__init__(parent)
         if text:
             self.text = text
+        dom.listen(self._el, "click", self._onClicked)
 
     def _onTextChanged(self, text):
         type(self).text.set_silently(self, text)
@@ -1203,6 +1253,14 @@ class QTextEdit(_ElementWidget):
     def setTextInteractionFlags(self, flags):
         # Whether the text can be selected or edited with mouse and keyboard; read-only is readOnly
         pass
+
+    def setAlignment(self, alignment):
+        """How the lines are aligned (Qt.AlignLeft, AlignHCenter, AlignRight, AlignCenter)."""
+        align = "center" if int(alignment) & 0x4 else "right" if int(alignment) & 0x2 else ""
+        try:
+            self._el.style.textAlign = align
+        except Exception:
+            pass
 
     def __init__(self, text="", parent=None):
         if isinstance(text, QWidget):
@@ -2045,8 +2103,8 @@ class QListWidget(QWidget, QAbstractItemView):
         self.currentItemChanged.emit(self.currentItem(), previous)
         self.itemSelectionChanged.emit()
 
-    def currentRow(self):
-        return self._current
+    # a Qt property: an attribute in PythonQt (list.currentRow), also called (list.currentRow())
+    currentRow = count_property(lambda self: self._current, lambda self, row: self.setCurrentRow(row))
 
     count = count_property(lambda self: len(self._items))
 
@@ -2398,6 +2456,16 @@ class QTableWidget(QWidget, QAbstractItemView):
 
     def setVerticalHeaderLabels(self, labels):
         pass  # rows are not labeled
+
+    def horizontalHeaderItem(self, column):
+        """The header of a column, as an item that holds its text; None for a column without one."""
+        return QTableWidgetItem(self._headers[column]) if 0 <= column < len(self._headers) else None
+
+    def setHorizontalHeaderItem(self, column, item):
+        self._headers += [""] * (column + 1 - len(self._headers))
+        self._headers[column] = item.text()
+        self._cols = max(self._cols, column + 1)
+        self._render()
 
     def horizontalHeader(self):
         return self._horizontalHeader
@@ -2775,6 +2843,12 @@ class QTableWidget(QWidget, QAbstractItemView):
         background = item._background._css()
         if background:
             td.style.backgroundColor = background
+        iconAddress = getattr(item.icon(), "_path", None)
+        if iconAddress and str(iconAddress).startswith("data:"):
+            image = dom.create("img", "shrink-0")
+            image.src = iconAddress
+            image.style.width = image.style.height = "14px"
+            line.appendChild(image)
         if item._checkState is not None:
             box = dom.create("input", "shrink-0")
             box.type = "checkbox"
@@ -3209,6 +3283,10 @@ class QHeaderView:
 
     Interactive, Stretch, Fixed, ResizeToContents = 0, 1, 2, 3
     Custom = Fixed
+
+    # Qt properties that modules size things from (read as table.verticalHeader().defaultSectionSize,
+    # also called): the height of a control in the page's style sheet, 28 pixels (h-7)
+    defaultSectionSize = minimumSectionSize = CallableInt(28)
 
     def __getattr__(self, name):
         return lambda *a, **k: None

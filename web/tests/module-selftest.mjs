@@ -45,15 +45,15 @@ await panel.locator("button.sw-button", { hasText: "Reload and Test" }).evaluate
 page.setDefaultTimeout(0);
 const statuses = [];
 for (let i = 0; i < 900; i++) {
-  const text = await panel.innerText();
-  if (/Test passed|Error|error:|Failed|failed/.test(text)) break;
+  // the page shows the result of a test when it has ended, whatever its message says
+  if (await page.locator("[data-name=testResult]").count()) break;
   // A test that says nothing (no slicer.util.delayDisplay) has no status line: not waited for
   const status = await page.locator("[data-name=testStatus]").first().innerText({ timeout: 500 }).catch(() => "");
   if (status && statuses[statuses.length - 1] !== status) statuses.push(status);
   await page.waitForTimeout(1000);
 }
 console.log(`while it ran, the page showed ${statuses.length} statuses${statuses.length ? ": " + statuses.slice(0, 8).join(" | ") : ""}`);
-console.log(`after ${((Date.now() - t0) / 1000).toFixed(0)} s: ${(await panel.innerText()).split("\n").filter((l) => /passed|Error|error|Failed|failed|s\)$/.test(l)).slice(0, 6).join(" | ")}`);
+console.log(`after ${((Date.now() - t0) / 1000).toFixed(0)} s: ${await page.locator("[data-name=testResult]").first().innerText({ timeout: 1000 }).catch(() => "no result")}`);
 // how much of the log to show: LOG_COUNT entries of up to LOG_CHARS characters
 const [logCount, logChars] = [Number(process.env.LOG_COUNT ?? 12), Number(process.env.LOG_CHARS ?? 1200)];
 const logs = await page.evaluate(([n, c]) => (window.__logs || []).slice(-n).map((l) => `${l.level}: ${String(l.message).slice(0, c)}`), [logCount, logChars]);
