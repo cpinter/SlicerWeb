@@ -5,5 +5,8 @@
   "category": "Examples",
   "scm_revision": "master",
   "scm_url": "https://github.com/PerkLab/SlicerSandbox.git",
-  "tier": 3
+  "tier": 3,
+  "slicerweb": {
+    "cmake_options": ["-DCombineModels_USE_KIGUMI=OFF"]
+  }
 }
