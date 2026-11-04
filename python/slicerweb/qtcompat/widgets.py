@@ -1943,7 +1943,10 @@ class QListWidgetItem:
         self._text = texts[0] if texts else ""
         self._toolTip = ""
         self._data = {}
-        self._flags = None
+        from .types import Qt
+
+        self._flags = (Qt.ItemIsSelectable | Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsDragEnabled)
+        self._checkState = None   # no check box until one is asked for
         self._list = None
         self._icon = None
         for a in args:
@@ -1955,6 +1958,16 @@ class QListWidgetItem:
     def _changed(self):
         if self._list is not None:
             self._list._render()
+            self._list.itemChanged.emit(self)
+
+    def checkState(self):
+        from .types import Qt
+
+        return self._checkState if self._checkState is not None else Qt.Unchecked
+
+    def setCheckState(self, state):
+        self._checkState = int(state)
+        self._changed()
 
     def text(self):
         return self._text
@@ -2008,6 +2021,7 @@ class QListWidget(QWidget, QAbstractItemView):
     currentRowChanged = Signal("currentRowChanged(int)")
     currentItemChanged = Signal("currentItemChanged(QListWidgetItem*,QListWidgetItem*)")
     itemSelectionChanged = Signal("itemSelectionChanged()")
+    itemChanged = Signal("itemChanged(QListWidgetItem*)")
     itemClicked = Signal("itemClicked(QListWidgetItem*)")
     itemDoubleClicked = Signal("itemDoubleClicked(QListWidgetItem*)")
 
@@ -2134,6 +2148,15 @@ class QListWidget(QWidget, QAbstractItemView):
             selected = " bg-accent" if index == self._current and not self._selectionCleared else ""
             layout = " flex flex-col items-center p-1 text-center" if iconMode else " flex items-center gap-1.5 px-2 py-0.5"
             row = dom.create("div", "text-[13px] rounded hover:bg-accent/60 cursor-pointer" + layout + selected)
+            if item._checkState is not None:
+                box = dom.create("input", "shrink-0")
+                box.type = "checkbox"
+                box.checked = item._checkState == 2   # Qt.Checked
+                # the box is the item's check state; it does not make the row the current one
+                box.addEventListener("click", dom.proxy(lambda e: e.stopPropagation()))
+                box.addEventListener("change", dom.proxy(
+                    lambda e, i=item, b=box: i.setCheckState(2 if b.checked else 0)))
+                row.appendChild(box)
             path = getattr(item._icon, "_path", None)
             url = icons.icon_url(path) if path else ""
             if url:

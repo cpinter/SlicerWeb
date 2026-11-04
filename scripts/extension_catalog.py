@@ -135,15 +135,15 @@ def requirement_name(text):
 
 def python_packages(description_path, install_dir):
     """Install what slicerweb.python_packages asks for: into <dir>/python-packages if pip has to
-    install it, and into <dir>/slicerweb-extension.json ("pythonPackages") if Pyodide has it."""
+    install it, and into <dir>/slicerweb-extension.json ("pythonPackages") if Pyodide has it. The
+    extensions the description depends on go there too ("depends"): an application's description
+    can name more than the extension's own CMakeLists.txt does."""
     name, description = read_description(description_path)
     requirements = (description.get("slicerweb") or {}).get("python_packages", [])
     target = os.path.join(install_dir, "python-packages")
     shutil.rmtree(target, ignore_errors=True)
-    if not requirements:
-        return
-    available = pyodide_packages()
     from_pyodide, from_pip = [], []
+    available = pyodide_packages() if requirements else {}
     for text in requirements:
         package, specifier = requirement_name(text)
         key = normalize(package)
@@ -177,10 +177,15 @@ def python_packages(description_path, install_dir):
                  + ", ".join(compiled[:5]))
 
     metadata = os.path.join(install_dir, "slicerweb-extension.json")
+    content = {}
     if from_pyodide:
+        content["pythonPackages"] = from_pyodide
+    if description.get("build_dependencies"):
+        content["depends"] = list(description["build_dependencies"])
+    if content:
         os.makedirs(install_dir, exist_ok=True)
         with open(metadata, "w", encoding="utf8") as handle:
-            json.dump({"pythonPackages": from_pyodide}, handle, indent=1)
+            json.dump(content, handle, indent=1)
     elif os.path.exists(metadata):
         os.remove(metadata)
 

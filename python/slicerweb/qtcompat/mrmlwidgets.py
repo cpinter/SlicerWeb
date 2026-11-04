@@ -98,6 +98,10 @@ class qMRMLNodeComboBox(_ElementWidget):
         """Qt property (attribute in PythonQt); also callable as currentNodeID()."""
         return property_value(self._currentNodeID or "")
 
+    @currentNodeID.setter
+    def currentNodeID(self, nodeID):
+        self.setCurrentNodeID(nodeID)
+
     currentNodeId = currentNodeID
 
     def setCurrentNode(self, node):
@@ -602,6 +606,34 @@ class ColorsModuleWidget(QWidget):
         self._legendWidget._node = None
 
 
+class _LogicalOperatorsEffect:
+    """The Logical operators effect as a script runs it: effect.setParameter("Operation", "UNION"),
+    effect.setParameter("ModifierSegmentID", id), effect.self().onApply()."""
+
+    _OPERATIONS = {"COPY": "copy", "UNION": "add", "SUBTRACT": "subtract", "INTERSECT": "intersect",
+                   "INVERT": "invert", "CLEAR": "clear", "FILL": "fill"}
+
+    def __init__(self):
+        self._parameters = {}
+
+    def self(self):
+        return self
+
+    def setParameter(self, name, value):
+        self._parameters[str(name)] = str(value)
+
+    def parameter(self, name):
+        return self._parameters.get(str(name), "")
+
+    def onApply(self):
+        from .. import segment_editor
+
+        operation = self._OPERATIONS.get(self.parameter("Operation").upper())
+        if operation is None:
+            raise ValueError(f"Logical operators: unknown operation {self.parameter('Operation')!r}")
+        segment_editor.editor().logicalOperation(operation, self.parameter("ModifierSegmentID") or None)
+
+
 class qMRMLSegmentEditorWidget(QWidget):
     """Placeholder: the browser Segment Editor is available as the "Segment Editor" module panel."""
 
@@ -630,15 +662,33 @@ class qMRMLSegmentEditorWidget(QWidget):
     def mrmlSegmentEditorNode(self):
         return getattr(self, "_segmentEditorNode", None)
 
+    def setCurrentSegmentID(self, segmentID):
+        from .. import segment_editor
+
+        segment_editor.editor().selectSegment(segmentID)
+
+    def currentSegmentID(self):
+        from .. import segment_editor
+
+        return segment_editor.editor().logic.GetCurrentSegmentID()
+
     def setActiveEffectByName(self, name):
         from .. import segment_editor
 
+        self._activeEffectName = name
         segment_editor.editor().setEffect(name)
 
     def setActiveEffect(self, effect):
         """None: no effect active. There are no effect objects here to activate (effectByName)."""
         if effect is None:
             self.setActiveEffectByName("")
+
+    def activeEffect(self):
+        """The active effect for a script to run, as far as there is one to run without its panel:
+        Logical operators. None for the others, as for an effect that is not available."""
+        if getattr(self, "_activeEffectName", "") == "Logical operators":
+            return _LogicalOperatorsEffect()
+        return None
 
     def effectByName(self, name):
         """None, as for an effect that is not there: the effects are the Segment Editor panel's."""

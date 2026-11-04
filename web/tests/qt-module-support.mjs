@@ -36,6 +36,12 @@ _list = qt.QListWidget()
 _list.addItem("a"); _list.addItem("b")
 _list.currentRow = 1
 _check("a list's currentRow is a property", 0 <= _list.currentRow < 2 and _list.currentRow() == 1)
+_changed = []
+_list.connect("itemChanged(QListWidgetItem*)", lambda item: _changed.append(item.text()))
+_checkable = _list.item(0)
+_checkable.setFlags(_checkable.flags() | qt.Qt.ItemIsUserCheckable)
+_checkable.setCheckState(qt.Qt.Checked)
+_check("a list item's check state", _checkable.checkState() == qt.Qt.Checked and _changed == ["a"], _changed)
 _label = qt.QLabel("Rp"); _box = qt.QLineEdit(); _label.setBuddy(_box)
 _check("a label's buddy", _label.buddy() is _box)
 _table = qt.QTableWidget(); _table.setHorizontalHeaderLabels(["A", "B"])

@@ -385,8 +385,10 @@ def extension_metadata(source_dir, install_dir=None):
         import json
 
         with open(built, encoding="utf8") as handle:
-            packages = json.load(handle).get("pythonPackages") or []
+            described = json.load(handle)
+        packages = described.get("pythonPackages") or []
         meta["pythonPackages"] = list(dict.fromkeys((meta.get("pythonPackages") or []) + packages))
+        meta["depends"] = list(dict.fromkeys(meta["depends"] + (described.get("depends") or [])))
     # and the packages that come with desktop Slicer that its Python code imports (see bundled_packages_imported)
     if install_dir:
         imported = bundled_packages_imported(install_dir)
